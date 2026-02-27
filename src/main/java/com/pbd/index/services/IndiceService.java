@@ -2,6 +2,7 @@ package com.pbd.index.services;
 
 import com.pbd.index.dtos.input.PageInputDTO;
 import com.pbd.index.dtos.output.BuscaChaveOutputDTO;
+import com.pbd.index.dtos.output.CarregarDadosOutputDTO;
 import com.pbd.index.entities.Bucket;
 import com.pbd.index.entities.EntradaIndice;
 import com.pbd.index.entities.Pagina;
@@ -19,22 +20,18 @@ import java.util.List;
 public class IndiceService {
 
     private int tamanhoPagina;
-
     private List<Pagina> tabelaDeDados;
-
     private int nb;
-
     private final int fr = 4;
-
     private Bucket[] buckets;
-
     private long tempoConstrucaoIndice;
 
     public void criarPagina(PageInputDTO inputDTO) {
         setTamanhoPagina(inputDTO.tamanhoPagina());
     }
 
-    public void processarCarga(MultipartFile arquivo) throws IOException {
+    // Alterado para retornar CarregarDadosOutputDTO
+    public CarregarDadosOutputDTO processarCarga(MultipartFile arquivo) throws IOException {
         tabelaDeDados = new ArrayList<>();
         int nr = 0;
 
@@ -62,6 +59,9 @@ public class IndiceService {
         }
 
         configurarECriarIndice(nr);
+
+        // Retorna o cálculo de estatísticas após a construção do índice
+        return calcularEstatisticas(nr);
     }
 
     private void configurarECriarIndice(int nr) {
@@ -84,13 +84,42 @@ public class IndiceService {
         this.tempoConstrucaoIndice = System.currentTimeMillis() - startTime;
     }
 
+    // Nova funcionalidade: Cálculo de estatísticas de colisão e overflow
+    private CarregarDadosOutputDTO calcularEstatisticas(int nr) {
+        int registrosColididos = 0;
+        int bucketsComOverflow = 0;
+
+        for (Bucket b : buckets) {
+            // Identifica se o bucket original precisou de encadeamento
+            if (b.getOverflow() != null) {
+                bucketsComOverflow++;
+
+                // Contabiliza registros que excederam o tamanho original do Bucket (FR)
+                Bucket atual = b.getOverflow();
+                while (atual != null) {
+                    registrosColididos += atual.getEntradas().size();
+                    atual = atual.getOverflow();
+                }
+            }
+        }
+
+        // Cálculo das taxas percentuais
+        double taxaColisoes = (double) registrosColididos / nr * 100;
+        double taxaOverflow = (double) bucketsComOverflow / nb * 100;
+
+        return new CarregarDadosOutputDTO(
+                bucketsComOverflow,
+                registrosColididos,
+                taxaColisoes,
+                taxaOverflow
+        );
+    }
+
     public BuscaChaveOutputDTO pesquisar(String chaveBusca) {
-        // ÍNDICE HASH
         long inicioIndice = System.nanoTime();
         int idPaginaEncontrada = buscaHash(chaveBusca);
         long fimIndice = System.nanoTime();
 
-        // FULL TABLE SCAN
         long inicioTableScan = System.nanoTime();
         int custoPaginasTableScan = buscaTableScan(chaveBusca);
         long fimTableScan = System.nanoTime();
@@ -98,7 +127,7 @@ public class IndiceService {
         return new BuscaChaveOutputDTO(
                 chaveBusca,
                 idPaginaEncontrada,
-                1,
+                1, // Custo estimado do índice (acesso ao bucket + página)
                 custoPaginasTableScan,
                 (fimIndice - inicioIndice),
                 (fimTableScan - inicioTableScan)
@@ -109,7 +138,7 @@ public class IndiceService {
         int enderecoBucket = funcaoHash(chaveBusca);
         int paginaId = - 1;
 
-	Bucket bucketAtual = buckets[enderecoBucket];
+        Bucket bucketAtual = buckets[enderecoBucket];
         while (bucketAtual != null) {
             for (EntradaIndice entrada : bucketAtual.getEntradas()) {
                 if (entrada.chave().equals(chaveBusca)) {
@@ -119,23 +148,11 @@ public class IndiceService {
             }
             bucketAtual = bucketAtual.getOverflow();
         }
-
-        if (paginaId != -1) {
-            Pagina pagina = tabelaDeDados.get(paginaId);
-
-            for (String registro : pagina.getRegistros()) {
-                if (registro.equals(chaveBusca)) {
-                    break;
-                }
-            }
-        }
-
         return paginaId;
     }
 
     private int buscaTableScan(String chaveBusca) {
         int custoPaginasTableScan = 0;
-
         for (Pagina p : tabelaDeDados) {
             custoPaginasTableScan++;
             for (String registro : p.getRegistros()) {
@@ -144,7 +161,6 @@ public class IndiceService {
                 }
             }
         }
-
         return -1;
     }
 
@@ -192,3 +208,5 @@ public class IndiceService {
         this.tempoConstrucaoIndice = tempoConstrucaoIndice;
     }
 }
+
+
