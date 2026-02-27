@@ -10,6 +10,7 @@ public class Bucket {
     private int fr;
     private Bucket overflow;
 
+
     public Bucket(int fr) {
 	this.fr = fr;
 	this.entradas = new ArrayList<>(fr);
@@ -21,14 +22,14 @@ public class Bucket {
     }
 
     public void adicionar(String chave, int paginaId) {
-	if (temEspaco()) {
-	    entradas.add(new EntradaIndice(chave, paginaId));
-	} else {
-	    if (this.overflow == null) {
-		this.overflow = new Bucket(fr);
-	    }
-	    this.overflow.adicionar(chave, paginaId);
-	}
+        if (temEspaco()) {
+            entradas.add(new EntradaIndice(chave, paginaId));
+        } else {
+            if (this.overflow == null) {
+                this.overflow = new Bucket(fr);
+            }
+            this.overflow.adicionar(chave, paginaId);
+        }
     }
 
     public List<EntradaIndice> getEntradas() {
