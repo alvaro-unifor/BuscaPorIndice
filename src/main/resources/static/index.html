@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Visualizador de Índice Hash</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --bg-elevated: #111827;
+            --accent: #38bdf8;
+            --accent-soft: rgba(56, 189, 248, 0.15);
+            --border: #1f2937;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --danger: #f97373;
+            --radius: 10px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: radial-gradient(circle at top left, #1e293b, #020617);
+            color: var(--text);
+        }
+
+        .app {
+            max-width: 1200px;
+            margin: 24px auto;
+            padding: 16px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 4px;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin: 0 0 12px 0;
+        }
+
+        p {
+            margin: 0;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.6fr);
+            gap: 16px;
+        }
+
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .card {
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            padding: 16px;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            gap: 8px;
+        }
+
+        .pill {
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            border: 1px solid var(--border);
+            color: var(--muted);
+        }
+
+        label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            background: #020617;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            padding: 6px 8px;
+            color: var(--text);
+            font-size: 0.85rem;
+        }
+
+        input[type="file"] {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        input:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .row > div {
+            flex: 1;
+        }
+
+        button {
+            background: var(--accent);
+            border-radius: 6px;
+            border: none;
+            padding: 7px 10px;
+            color: #0b1120;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        button.secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: default;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .status-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+            font-size: 0.8rem;
+        }
+
+        .badge {
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            border: 1px solid rgba(56, 189, 248, 0.45);
+            color: var(--accent);
+        }
+
+        .badge-muted {
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(31, 41, 55, 0.8);
+            border: 1px solid var(--border);
+            color: var(--muted);
+        }
+
+        .badge-danger {
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(248, 113, 113, 0.08);
+            border: 1px solid rgba(248, 113, 113, 0.5);
+            color: var(--danger);
+        }
+
+        .section-title {
+            font-size: 0.9rem;
+            margin: 14px 0 6px;
+            color: var(--muted);
+        }
+
+        .output {
+            margin-top: 8px;
+            background: #020617;
+            border-radius: 8px;
+            border: 1px solid #020617;
+            max-height: 260px;
+            overflow: auto;
+            padding: 8px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.78rem;
+        }
+
+        .output strong {
+            color: var(--accent);
+        }
+
+        .columns-2 {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 8px;
+        }
+
+        @media (max-width: 700px) {
+            .columns-2 {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .hint {
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .error {
+            margin-top: 6px;
+            font-size: 0.78rem;
+            color: var(--danger);
+        }
+
+        .highlight-bar {
+            margin-top: 6px;
+            margin-bottom: 4px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            background: rgba(56, 189, 248, 0.06);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            font-size: 0.78rem;
+        }
+
+        .highlight-bar strong {
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header>
+        <h1>Visualizador de Índice por Hash</h1>
+        <p class="subtitle">
+            Página simples em HTML+JS para interagir com as rotas do backend e enxergar
+            <strong>buckets</strong>, <strong>páginas</strong> e o <strong>processo de busca</strong>.
+        </p>
+    </header>
+
+    <div class="grid">
+        <section class="card">
+            <div class="card-header">
+                <h2>Configuração &amp; Carga de Dados</h2>
+                <span class="pill">Passo 1</span>
+            </div>
+
+            <div class="section-title">Tamanho de página</div>
+            <div class="row">
+                <div>
+                    <label for="tamanhoPagina">Tamanho da página (nr registros)</label>
+                    <input id="tamanhoPagina" type="number" min="1" step="1" placeholder="Ex: 4">
+                </div>
+                <button id="btnCriarPagina" onclick="criarPagina()">Definir</button>
+            </div>
+
+            <div class="section-title">Arquivo de palavras</div>
+            <div class="row">
+                <div>
+                    <label for="arquivo">Arquivo texto (.txt), uma palavra por linha</label>
+                    <input id="arquivo" type="file" accept=".txt">
+                </div>
+                <button id="btnCarregarArquivo" onclick="carregarArquivo()">Carregar</button>
+            </div>
+
+            <div id="erroConfig" class="error" style="display:none"></div>
+
+            <div class="section-title">Status do índice</div>
+            <div class="button-row">
+                <button class="secondary" onclick="atualizarStatus()">Atualizar status</button>
+            </div>
+            <div id="statusIndice" class="output"></div>
+
+            <div class="hint">
+                Dica: siga a ordem <strong>definir página → carregar arquivo → buscar</strong>.
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <h2>Busca detalhada (índice x table scan)</h2>
+                <span class="pill">Passo 2</span>
+            </div>
+
+            <div class="row">
+                <div>
+                    <label for="chaveBusca">Chave para busca</label>
+                    <input id="chaveBusca" type="text" placeholder="Digite a palavra exata">
+                </div>
+                <button id="btnBuscarDetalhado" onclick="buscarDetalhado()">Buscar detalhado</button>
+            </div>
+
+            <div class="status-row">
+                <span id="badgeBucket" class="badge-muted">Bucket/Página: -</span>
+                <span id="badgeCustoIndice" class="badge-muted">Custo índice: -</span>
+                <span id="badgeCustoScan" class="badge-muted">Custo table scan: -</span>
+                <span id="badgeComparacao" class="badge-muted">Ganho índice vs scan: -</span>
+            </div>
+
+            <div class="columns-2">
+                <div>
+                    <div class="section-title">Busca pelo índice (hash)</div>
+                    <div id="saidaIndice" class="output"></div>
+                </div>
+                <div>
+                    <div class="section-title">Table scan detalhado</div>
+                    <div id="saidaScan" class="output"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <section class="card" style="margin-top:16px;">
+        <div class="card-header">
+            <h2>Visualização de buckets e páginas</h2>
+            <span class="pill">Passo 3 (GUI)</span>
+        </div>
+
+        <div class="button-row">
+            <button class="secondary" onclick="carregarBuckets()">Carregar buckets</button>
+            <button class="secondary" onclick="carregarPaginas()">Carregar páginas</button>
+        </div>
+
+        <div class="columns-2" style="margin-top:10px;">
+            <div>
+                <div class="section-title">Buckets do índice</div>
+                <div id="highlightBuckets" class="highlight-bar" style="display:none"></div>
+                <div id="saidaBuckets" class="output"></div>
+            </div>
+            <div>
+                <div class="section-title">Páginas de dados</div>
+                <div id="highlightPaginas" class="highlight-bar" style="display:none"></div>
+                <div id="saidaPaginas" class="output"></div>
+            </div>
+        </div>
+
+        <div class="hint">
+            Nos buckets, o campo <strong>nivelOverflow</strong> indica onde o registro está:
+            0 = bucket principal, 1 = primeiro overflow, 2 = próximo, e assim por diante.
+        </div>
+    </section>
+</div>
+
+<script>
+    async function criarPagina() {
+        const tamanhoInput = document.getElementById('tamanhoPagina');
+        const erro = document.getElementById('erroConfig');
+        erro.style.display = 'none';
+
+        const tamanho = parseInt(tamanhoInput.value, 10);
+        if (!tamanho || tamanho <= 0) {
+            erro.textContent = 'Informe um tamanho de página válido (inteiro > 0).';
+            erro.style.display = 'block';
+            return;
+        }
+
+        try {
+            const resp = await fetch('/indice/criar-pagina', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ tamanhoPagina: tamanho })
+            });
+
+            if (!resp.ok) {
+                throw new Error('Erro HTTP ' + resp.status);
+            }
+
+            erro.style.display = 'none';
+            alert('Tamanho da página definido com sucesso.');
+        } catch (e) {
+            erro.textContent = 'Falha ao definir tamanho de página. Verifique se o backend está no ar.';
+            erro.style.display = 'block';
+        }
+    }
+
+    async function carregarArquivo() {
+        const arquivoInput = document.getElementById('arquivo');
+        const erro = document.getElementById('erroConfig');
+        const statusDiv = document.getElementById('statusIndice');
+
+        erro.style.display = 'none';
+
+        if (!arquivoInput.files || arquivoInput.files.length === 0) {
+            erro.textContent = 'Selecione um arquivo .txt antes de carregar.';
+            erro.style.display = 'block';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('arquivo', arquivoInput.files[0]);
+
+        try {
+            const resp = await fetch('/indice/carregar', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!resp.ok) {
+                throw new Error('Erro HTTP ' + resp.status);
+            }
+            const data = await resp.json();
+
+            statusDiv.textContent = 'Carga concluída. Estatísticas de overflow/colisões:\\n'
+                + JSON.stringify(data, null, 2);
+        } catch (e) {
+            erro.textContent = 'Falha ao carregar arquivo. Garanta que o tamanho de página já foi definido.';
+            erro.style.display = 'block';
+        }
+    }
+
+    async function atualizarStatus() {
+        const el = document.getElementById('statusIndice');
+        el.textContent = 'Carregando status...';
+
+        try {
+            const resp = await fetch('/indice/status');
+            if (!resp.ok) {
+                el.textContent = 'Ainda não há dados/índice carregados (status HTTP ' + resp.status + ').';
+                return;
+            }
+            const data = await resp.json();
+            el.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+            el.textContent = 'Erro ao buscar status. Verifique se o backend está no ar.';
+        }
+    }
+
+    async function buscarDetalhado() {
+        const chave = document.getElementById('chaveBusca').value.trim();
+        const saidaIndice = document.getElementById('saidaIndice');
+        const saidaScan = document.getElementById('saidaScan');
+        const badgeBucket = document.getElementById('badgeBucket');
+        const badgeCustoIndice = document.getElementById('badgeCustoIndice');
+        const badgeCustoScan = document.getElementById('badgeCustoScan');
+        const badgeComparacao = document.getElementById('badgeComparacao');
+        const highlightBuckets = document.getElementById('highlightBuckets');
+        const highlightPaginas = document.getElementById('highlightPaginas');
+
+        if (!chave) {
+            alert('Digite uma chave para buscar.');
+            return;
+        }
+
+        saidaIndice.textContent = 'Buscando...';
+        saidaScan.textContent = '';
+
+        try {
+            const resp = await fetch('/indice/pesquisar-detalhado?chave=' + encodeURIComponent(chave));
+            if (!resp.ok) {
+                saidaIndice.textContent = 'Erro HTTP ' + resp.status + ' ao buscar.';
+                return;
+            }
+            const data = await resp.json();
+
+            // Atualiza badges principais
+            const indice = data;
+            const scan = data.tableScan;
+
+            const custoIndice = indice.custoIndice;
+            const custoScan = scan ? scan.custoPaginas : null;
+            const tempoIndice = indice.tempoIndice;
+            const tempoScan = indice.diferencaTempo !== undefined && indice.diferencaTempo !== null
+                ? tempoIndice + indice.diferencaTempo
+                : null;
+
+            badgeBucket.textContent =
+                'Bucket (índice): ' + indice.enderecoBucket +
+                ' | Página (índice): ' + indice.paginaIdIndice;
+            badgeCustoIndice.textContent = 'Custo índice (buckets + página): ' + custoIndice;
+            badgeCustoScan.textContent = 'Custo table scan (páginas): ' + (custoScan ?? '-');
+
+            // Diferença percentual de custo/tempo entre índice e scan
+            let resumoComparacao = 'Ganho índice vs scan: -';
+            if (custoScan && custoScan > 0) {
+                const ganhoCusto = ((custoScan - custoIndice) / custoScan) * 100;
+                const ganhoCustoFmt = ganhoCusto.toFixed(1);
+
+                if (tempoScan && tempoScan > 0) {
+                    const ganhoTempo = ((tempoScan - tempoIndice) / tempoScan) * 100;
+                    const ganhoTempoFmt = ganhoTempo.toFixed(1);
+                    resumoComparacao =
+                        `Índice lê ~${ganhoCustoFmt}% menos páginas e é ~${ganhoTempoFmt}% mais rápido que o scan.`;
+                } else {
+                    resumoComparacao =
+                        `Índice lê ~${ganhoCustoFmt}% menos páginas que o table scan.`;
+                }
+            }
+            badgeComparacao.textContent = resumoComparacao;
+
+            // Exibe parte relevante de índice
+            const indiceResumo = {
+                chave: indice.chave,
+                paginaIdIndice: indice.paginaIdIndice,
+                custoIndice: indice.custoIndice,
+                enderecoBucket: indice.enderecoBucket,
+                bucketsPercorridos: indice.bucketsPercorridos,
+                tempoIndiceNs: indice.tempoIndice
+            };
+            saidaIndice.textContent = JSON.stringify(indiceResumo, null, 2);
+
+            // Exibe table scan detalhado (caminho de páginas visitadas)
+            if (scan) {
+                const scanResumo = {
+                    paginaEncontrada: scan.paginaEncontrada,
+                    custoPaginas: scan.custoPaginas,
+                    paginasVisitadas: scan.paginasVisitadas,
+                    previews: scan.previews
+                };
+                saidaScan.textContent = JSON.stringify(scanResumo, null, 2);
+            } else {
+                saidaScan.textContent = 'Nenhum detalhe de table scan retornado.';
+            }
+
+            // Destaques visuais em buckets e páginas (CA29)
+            highlightBuckets.style.display = 'block';
+            highlightBuckets.innerHTML =
+                `Última busca "<strong>${indice.chave}</strong>": bucket <strong>#${indice.enderecoBucket}</strong> ` +
+                `(percorridos: ${indice.bucketsPercorridos}).`;
+
+            const partesPagina = [];
+            partesPagina.push(`página pelo índice: <strong>${indice.paginaIdIndice}</strong>`);
+            if (scan && scan.paginaEncontrada !== undefined && scan.paginaEncontrada >= 0) {
+                partesPagina.push(`página pelo table scan: <strong>${scan.paginaEncontrada}</strong>`);
+            }
+            highlightPaginas.style.display = 'block';
+            highlightPaginas.innerHTML =
+                `Última busca "<strong>${indice.chave}</strong>": ` + partesPagina.join(' | ');
+        } catch (e) {
+            saidaIndice.textContent = 'Erro ao chamar /indice/pesquisar-detalhado.';
+        }
+    }
+
+    async function carregarBuckets() {
+        const el = document.getElementById('saidaBuckets');
+        el.textContent = 'Carregando buckets...';
+
+        try {
+            const resp = await fetch('/indice/buckets');
+            if (!resp.ok) {
+                el.textContent = 'Ainda não há índice construído (status HTTP ' + resp.status + ').';
+                return;
+            }
+            const data = await resp.json();
+            el.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+            el.textContent = 'Erro ao buscar buckets. Verifique se o backend está no ar.';
+        }
+    }
+
+    async function carregarPaginas() {
+        const el = document.getElementById('saidaPaginas');
+        el.textContent = 'Carregando páginas...';
+
+        try {
+            const resp = await fetch('/indice/paginas');
+            if (!resp.ok) {
+                el.textContent = 'Ainda não há páginas carregadas (status HTTP ' + resp.status + ').';
+                return;
+            }
+            const data = await resp.json();
+            el.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+            el.textContent = 'Erro ao buscar páginas. Verifique se o backend está no ar.';
+        }
+    }
+</script>
+</body>
+</html>
+

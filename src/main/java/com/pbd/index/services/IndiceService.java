@@ -13,6 +13,9 @@ import com.pbd.index.dtos.output.PagePreviewDTO;
 import com.pbd.index.dtos.output.BuscaIndiceDetalhadaDTO;
 import com.pbd.index.dtos.output.TableScanDetalhadoDTO;
 import com.pbd.index.dtos.output.BuscaChaveDetalhadaOutputDTO;
+import com.pbd.index.dtos.output.BucketDetalheDTO;
+import com.pbd.index.dtos.output.BucketEntradaDTO;
+import com.pbd.index.dtos.output.PaginaDetalheDTO;
 
 
 import java.io.BufferedReader;
@@ -254,6 +257,8 @@ public class IndiceService {
                 detalheIndice.paginaId(),
                 detalheIndice.custoIndice(),
                 tempoIndice,
+                detalheIndice.enderecoBucket(),
+                detalheIndice.bucketsPercorridos(),
                 detalheScan,
                 (tempoScan - tempoIndice)
         );
@@ -295,6 +300,56 @@ public class IndiceService {
                 est.taxaColisoes(),
                 est.taxaOverflow()
         );
+    }
+
+    public List<BucketDetalheDTO> listarBuckets() {
+        if (buckets == null || nb == 0) {
+            return new ArrayList<>();
+        }
+
+        List<BucketDetalheDTO> resultado = new ArrayList<>();
+
+        for (int i = 0; i < nb; i++) {
+            Bucket bucket = buckets[i];
+            if (bucket == null) {
+                continue;
+            }
+
+            List<BucketEntradaDTO> entradasDTO = new ArrayList<>();
+            Bucket atual = bucket;
+            int nivel = 0;
+
+            while (atual != null) {
+                for (EntradaIndice entrada : atual.getEntradas()) {
+                    entradasDTO.add(new BucketEntradaDTO(
+                            entrada.chave(),
+                            entrada.paginaId(),
+                            nivel
+                    ));
+                }
+                atual = atual.getOverflow();
+                nivel++;
+            }
+
+            resultado.add(new BucketDetalheDTO(i, entradasDTO));
+        }
+
+        return resultado;
+    }
+
+    public List<PaginaDetalheDTO> listarPaginas() {
+        if (tabelaDeDados == null || tabelaDeDados.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<PaginaDetalheDTO> paginas = new ArrayList<>();
+        for (Pagina p : tabelaDeDados) {
+            paginas.add(new PaginaDetalheDTO(
+                    p.getId(),
+                    new ArrayList<>(p.getRegistros())
+            ));
+        }
+        return paginas;
     }
 
     private int funcaoHash(String chave) {

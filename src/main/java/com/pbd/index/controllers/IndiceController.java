@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.pbd.index.dtos.output.IndiceStatusOutputDTO;
 import com.pbd.index.dtos.output.BuscaChaveDetalhadaOutputDTO;
+import com.pbd.index.dtos.output.BucketDetalheDTO;
+import com.pbd.index.dtos.output.PaginaDetalheDTO;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/indice")
@@ -62,5 +66,21 @@ public class IndiceController {
     @GetMapping("/pesquisar")
     public BuscaChaveOutputDTO pesquisar(@RequestParam String chave) {
         return service.pesquisar(chave);
+    }
+
+    @GetMapping("/buckets")
+    public ResponseEntity<List<BucketDetalheDTO>> listarBuckets() {
+        if (service.getBuckets() == null || service.getNb() == 0) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(service.listarBuckets());
+    }
+
+    @GetMapping("/paginas")
+    public ResponseEntity<List<PaginaDetalheDTO>> listarPaginas() {
+        if (service.getTabelaDeDados() == null || service.getTabelaDeDados().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(service.listarPaginas());
     }
 }
