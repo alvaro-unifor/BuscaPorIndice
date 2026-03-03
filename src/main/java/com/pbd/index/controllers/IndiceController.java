@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.pbd.index.dtos.output.IndiceStatusOutputDTO;
+import com.pbd.index.dtos.output.BuscaChaveDetalhadaOutputDTO;
 
 @RestController
 @RequestMapping("/indice")
@@ -40,6 +42,21 @@ public class IndiceController {
             // Em caso de erro, retornamos o status 500
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    @GetMapping("/status")
+    public ResponseEntity<IndiceStatusOutputDTO> status() {
+        IndiceStatusOutputDTO status = service.getStatus();
+        if (status == null) {
+            // ainda não carregou dados/índice
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(status);
+    }
+
+    @GetMapping("/pesquisar-detalhado")
+    public ResponseEntity<BuscaChaveDetalhadaOutputDTO> pesquisarDetalhado(@RequestParam String chave) {
+        return ResponseEntity.ok(service.pesquisarDetalhado(chave));
     }
 
     @GetMapping("/pesquisar")

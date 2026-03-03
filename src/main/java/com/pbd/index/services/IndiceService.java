@@ -8,6 +8,12 @@ import com.pbd.index.entities.EntradaIndice;
 import com.pbd.index.entities.Pagina;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import com.pbd.index.dtos.output.IndiceStatusOutputDTO;
+import com.pbd.index.dtos.output.PagePreviewDTO;
+import com.pbd.index.dtos.output.BuscaIndiceDetalhadaDTO;
+import com.pbd.index.dtos.output.TableScanDetalhadoDTO;
+import com.pbd.index.dtos.output.BuscaChaveDetalhadaOutputDTO;
+
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -25,6 +31,7 @@ public class IndiceService {
     private final int fr = 4;
     private Bucket[] buckets;
     private long tempoConstrucaoIndice;
+    private int nrTotal;
 
     public void criarPagina(PageInputDTO inputDTO) {
         setTamanhoPagina(inputDTO.tamanhoPagina());
@@ -32,6 +39,10 @@ public class IndiceService {
 
     // Alterado para retornar CarregarDadosOutputDTO
     public CarregarDadosOutputDTO processarCarga(MultipartFile arquivo) throws IOException {
+        if (tamanhoPagina <= 0) {
+            throw new IllegalStateException("Defina o tamanho da página antes de carregar. Use /indice/criar-pagina.");
+        }
+
         tabelaDeDados = new ArrayList<>();
         int nr = 0;
 
@@ -57,6 +68,8 @@ public class IndiceService {
                 nr++;
             }
         }
+
+        this.nrTotal = nr;
 
         configurarECriarIndice(nr);
 
@@ -117,7 +130,8 @@ public class IndiceService {
 
     public BuscaChaveOutputDTO pesquisar(String chaveBusca) {
         long inicioIndice = System.nanoTime();
-        int idPaginaEncontrada = buscaHash(chaveBusca);
+        BuscaIndiceDetalhadaDTO detalhe = buscaHashDetalhada(chaveBusca);
+        int idPaginaEncontrada = detalhe.paginaId();
         long fimIndice = System.nanoTime();
 
         long inicioTableScan = System.nanoTime();
@@ -125,30 +139,50 @@ public class IndiceService {
         long fimTableScan = System.nanoTime();
 
         return new BuscaChaveOutputDTO(
-                chaveBusca,
-                idPaginaEncontrada,
-                1, // Custo estimado do índice (acesso ao bucket + página)
-                custoPaginasTableScan,
-                (fimIndice - inicioIndice),
-                (fimTableScan - inicioTableScan)
+            chaveBusca,
+            idPaginaEncontrada,
+            detalhe.custoIndice(),
+            custoPaginasTableScan,
+            (fimIndice - inicioIndice),
+            (fimTableScan - inicioTableScan)
         );
     }
 
-    private int buscaHash(String chaveBusca) {
+    private BuscaIndiceDetalhadaDTO buscaHashDetalhada(String chaveBusca) {
         int enderecoBucket = funcaoHash(chaveBusca);
+
+        int bucketsPercorridos = 0;
         int paginaId = - 1;
 
         Bucket bucketAtual = buckets[enderecoBucket];
+
         while (bucketAtual != null) {
+            bucketsPercorridos++;
+
             for (EntradaIndice entrada : bucketAtual.getEntradas()) {
                 if (entrada.chave().equals(chaveBusca)) {
                     paginaId = entrada.paginaId();
                     break;
                 }
             }
+
+            if (paginaId != -1) break;
             bucketAtual = bucketAtual.getOverflow();
         }
-        return paginaId;
+
+        // Custo: 1 por bucket lido (principal + overflows)
+        // Se achou, +1 por ler a página de dados
+        int custoIndice = bucketsPercorridos;
+        if (paginaId != -1) {
+            custoIndice += 1;
+        }
+
+        return new BuscaIndiceDetalhadaDTO(
+            paginaId,
+            custoIndice,
+            enderecoBucket,
+            bucketsPercorridos
+        );
     }
 
     private int buscaTableScan(String chaveBusca) {
@@ -162,6 +196,105 @@ public class IndiceService {
             }
         }
         return -1;
+    }
+
+    private TableScanDetalhadoDTO buscaTableScanDetalhada(String chaveBusca) {
+        int custoPaginas = 0;
+        int paginaEncontrada = -1;
+
+        List<Integer> paginasVisitadas = new ArrayList<>();
+        List<PagePreviewDTO> previews = new ArrayList<>();
+
+        for (Pagina p : tabelaDeDados) {
+            custoPaginas++;
+            paginasVisitadas.add(p.getId());
+
+            // preview dos primeiros 5 registros da página (o que "foi lido")
+            previews.add(new PagePreviewDTO(
+                p.getId(),
+                p.getRegistros().stream().limit(5).toList()
+            ));
+
+            // varredura completa da página
+            for (String registro : p.getRegistros()) {
+                if (registro.equals(chaveBusca)) {
+                    paginaEncontrada = p.getId();
+                    return new TableScanDetalhadoDTO(
+                        paginaEncontrada,
+                        custoPaginas,
+                        paginasVisitadas,
+                        previews
+                    );
+                }
+            }
+        }
+
+        return new TableScanDetalhadoDTO(
+            -1,
+            custoPaginas, // leu tudo e não achou
+            paginasVisitadas,
+            previews
+        );
+    }
+
+    public BuscaChaveDetalhadaOutputDTO pesquisarDetalhado(String chaveBusca) {
+        long inicioIndice = System.nanoTime();
+        BuscaIndiceDetalhadaDTO detalheIndice = buscaHashDetalhada(chaveBusca);
+        long fimIndice = System.nanoTime();
+
+        long inicioTableScan = System.nanoTime();
+        TableScanDetalhadoDTO detalheScan = buscaTableScanDetalhada(chaveBusca);
+        long fimTableScan = System.nanoTime();
+
+        long tempoIndice = (fimIndice - inicioIndice);
+        long tempoScan = (fimTableScan - inicioTableScan);
+
+        return new BuscaChaveDetalhadaOutputDTO(
+                chaveBusca,
+                detalheIndice.paginaId(),
+                detalheIndice.custoIndice(),
+                tempoIndice,
+                detalheScan,
+                (tempoScan - tempoIndice)
+        );
+    }
+
+    public IndiceStatusOutputDTO getStatus() {
+        if (tabelaDeDados == null || tabelaDeDados.isEmpty() || buckets == null) {
+            // Você pode trocar por exceção depois, mas assim já funciona.
+            return null;
+        }
+
+        int totalPaginas = tabelaDeDados.size();
+
+        Pagina primeira = tabelaDeDados.get(0);
+        Pagina ultima = tabelaDeDados.get(totalPaginas - 1);
+
+        PagePreviewDTO primeiraPreview = new PagePreviewDTO(
+                primeira.getId(),
+                primeira.getRegistros().stream().limit(5).toList()
+        );
+
+        PagePreviewDTO ultimaPreview = new PagePreviewDTO(
+                ultima.getId(),
+                ultima.getRegistros().stream().limit(5).toList()
+        );
+
+        // Reusa a lógica que você já tem para taxas:
+        CarregarDadosOutputDTO est = calcularEstatisticas(nrTotal);
+
+        return new IndiceStatusOutputDTO(
+                nrTotal,
+                tamanhoPagina,
+                totalPaginas,
+                fr,
+                nb,
+                tempoConstrucaoIndice,
+                primeiraPreview,
+                ultimaPreview,
+                est.taxaColisoes(),
+                est.taxaOverflow()
+        );
     }
 
     private int funcaoHash(String chave) {
