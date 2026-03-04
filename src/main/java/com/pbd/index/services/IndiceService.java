@@ -142,12 +142,12 @@ public class IndiceService {
         long fimTableScan = System.nanoTime();
 
         return new BuscaChaveOutputDTO(
-            chaveBusca,
-            idPaginaEncontrada,
-            detalhe.custoIndice(),
-            custoPaginasTableScan,
-            (fimIndice - inicioIndice),
-            (fimTableScan - inicioTableScan)
+                chaveBusca,
+                idPaginaEncontrada,
+                detalhe.custoIndice(),
+                custoPaginasTableScan,
+                (fimIndice - inicioIndice),
+                (fimTableScan - inicioTableScan)
         );
     }
 
@@ -156,6 +156,7 @@ public class IndiceService {
 
         int bucketsPercorridos = 0;
         int paginaId = - 1;
+        String chaveEncontrada = null;
 
         Bucket bucketAtual = buckets[enderecoBucket];
 
@@ -173,6 +174,14 @@ public class IndiceService {
             bucketAtual = bucketAtual.getOverflow();
         }
 
+        Pagina paginaEncontrada = tabelaDeDados.get(paginaId);
+        for (String registro : paginaEncontrada.getRegistros()) {
+            if (registro.equals(chaveBusca)) {
+                chaveEncontrada = registro;
+                break;
+            }
+        }
+
         // Custo: 1 por bucket lido (principal + overflows)
         // Se achou, +1 por ler a página de dados
         int custoIndice = bucketsPercorridos;
@@ -181,10 +190,11 @@ public class IndiceService {
         }
 
         return new BuscaIndiceDetalhadaDTO(
-            paginaId,
-            custoIndice,
-            enderecoBucket,
-            bucketsPercorridos
+                paginaId,
+                custoIndice,
+                enderecoBucket,
+                bucketsPercorridos,
+                chaveEncontrada
         );
     }
 
@@ -214,8 +224,8 @@ public class IndiceService {
 
             // preview dos primeiros 5 registros da página (o que "foi lido")
             previews.add(new PagePreviewDTO(
-                p.getId(),
-                p.getRegistros().stream().limit(5).toList()
+                    p.getId(),
+                    p.getRegistros().stream().limit(5).toList()
             ));
 
             // varredura completa da página
@@ -223,20 +233,20 @@ public class IndiceService {
                 if (registro.equals(chaveBusca)) {
                     paginaEncontrada = p.getId();
                     return new TableScanDetalhadoDTO(
-                        paginaEncontrada,
-                        custoPaginas,
-                        paginasVisitadas,
-                        previews
+                            paginaEncontrada,
+                            custoPaginas,
+                            paginasVisitadas,
+                            previews
                     );
                 }
             }
         }
 
         return new TableScanDetalhadoDTO(
-            -1,
-            custoPaginas, // leu tudo e não achou
-            paginasVisitadas,
-            previews
+                -1,
+                custoPaginas, // leu tudo e não achou
+                paginasVisitadas,
+                previews
         );
     }
 
