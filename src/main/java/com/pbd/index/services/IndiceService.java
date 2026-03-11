@@ -363,16 +363,16 @@ public class IndiceService {
     }
 
     private int funcaoHash(String chave) {
-        // Escolhemos um número primo inicial para aumentar a dispersão
-        long hash = 7;
+        // O segredo do DJB2: começar com o número primo 5381
+        long hash = 5381;
 
-        // Percorremos cada caractere da palavra (chave)
         for (int i = 0; i < chave.length(); i++) {
-            // Multiplicamos por 31 (primo comum em funções hash) e somamos o valor do caractere
-            hash = hash * 31 + chave.charAt(i);
+            // Operação clássica do DJB2: (hash << 5) + hash + caractere
+            // Isso é o mesmo que: hash * 33 + caractere
+            hash = ((hash << 5) + hash) + chave.charAt(i);
         }
 
-        // Garantimos que o resultado seja positivo e esteja dentro do intervalo de buckets [0..NB-1]
+        // Garantimos o intervalo positivo e dentro do número de buckets
         return (int) (Math.abs(hash) % nb);
     }
 
