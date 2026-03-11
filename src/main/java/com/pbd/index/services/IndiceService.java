@@ -363,7 +363,17 @@ public class IndiceService {
     }
 
     private int funcaoHash(String chave) {
-        return Math.abs(chave.hashCode()) % nb;
+        // Escolhemos um número primo inicial para aumentar a dispersão
+        long hash = 7;
+
+        // Percorremos cada caractere da palavra (chave)
+        for (int i = 0; i < chave.length(); i++) {
+            // Multiplicamos por 31 (primo comum em funções hash) e somamos o valor do caractere
+            hash = hash * 31 + chave.charAt(i);
+        }
+
+        // Garantimos que o resultado seja positivo e esteja dentro do intervalo de buckets [0..NB-1]
+        return (int) (Math.abs(hash) % nb);
     }
 
     public int getTamanhoPagina() {
