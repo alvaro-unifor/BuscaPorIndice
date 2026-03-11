@@ -24,6 +24,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class IndiceService {
@@ -31,23 +32,31 @@ public class IndiceService {
     private int tamanhoPagina;
     private List<Pagina> tabelaDeDados;
     private int nb;
-    private final int fr = 4;
+    private final int fr = 20;
     private Bucket[] buckets;
     private long tempoConstrucaoIndice;
     private int nrTotal;
+    private int qntdOverflow;
+    private int qntdColisoes;
 
     public void criarPagina(PageInputDTO inputDTO) {
         setTamanhoPagina(inputDTO.tamanhoPagina());
     }
 
-    // Alterado para retornar CarregarDadosOutputDTO
     public CarregarDadosOutputDTO processarCarga(MultipartFile arquivo) throws IOException {
         if (tamanhoPagina <= 0) {
             throw new IllegalStateException("Defina o tamanho da página antes de carregar. Use /indice/criar-pagina.");
         }
 
-        tabelaDeDados = new ArrayList<>();
-        int nr = 0;
+        int nr;
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(arquivo.getInputStream(), StandardCharsets.UTF_8))) {
+
+            nr = Math.toIntExact(reader.lines().count());
+            int qntdPaginas = (int) Math.ceil((double) nr / tamanhoPagina);
+            tabelaDeDados = new ArrayList<>(qntdPaginas);
+        }
 
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(arquivo.getInputStream(), StandardCharsets.UTF_8))) {
@@ -68,7 +77,6 @@ public class IndiceService {
                 }
 
                 paginaAtual.adicionarRegistro(palavra);
-                nr++;
             }
         }
 
@@ -76,13 +84,10 @@ public class IndiceService {
 
         configurarECriarIndice(nr);
 
-        // Retorna o cálculo de estatísticas após a construção do índice
         return calcularEstatisticas(nr);
     }
 
     private void configurarECriarIndice(int nr) {
-        // Regra: NB > NR/FR. Usamos ceil(NR/FR) + 1 para garantir estritamente maior.
-        // Para nr=0 ou edge cases, garantimos nb mínimo 2.
         int minimoNb = (nr > 0) ? (int) Math.ceil((double) nr / fr) + 1 : 2;
         this.nb = Math.max(2, minimoNb);
 
@@ -93,43 +98,29 @@ public class IndiceService {
 
         long startTime = System.currentTimeMillis();
 
+        AtomicInteger qntdOverflow = new AtomicInteger(0);
+        AtomicInteger qntdColisoes = new AtomicInteger(0);
         for (Pagina pagina : tabelaDeDados) {
             for (String chave : pagina.getRegistros()) {
                 int enderecoBucket = funcaoHash(chave);
-                buckets[enderecoBucket].adicionar(chave, pagina.getId());
+                buckets[enderecoBucket].adicionar(chave, pagina.getId(), qntdOverflow, qntdColisoes);
             }
         }
+
+        this.qntdColisoes = qntdColisoes.get();
+        this.qntdOverflow = qntdOverflow.get();
 
         this.tempoConstrucaoIndice = System.currentTimeMillis() - startTime;
     }
 
-    // Nova funcionalidade: Cálculo de estatísticas de colisão e overflow
     private CarregarDadosOutputDTO calcularEstatisticas(int nr) {
-        int registrosColididos = 0;
-        int bucketsComOverflow = 0;
-
-        for (Bucket b : buckets) {
-            // Identifica se o bucket original precisou de encadeamento
-            if (b.getOverflow() != null) {
-                bucketsComOverflow++;
-
-                // Contabiliza registros que excederam o tamanho original do Bucket (FR)
-                Bucket atual = b.getOverflow();
-                while (atual != null) {
-                    registrosColididos += atual.getEntradas().size();
-                    atual = atual.getOverflow();
-                }
-            }
-        }
-
-        // Cálculo das taxas percentuais
-        double taxaColisoes = (nr > 0) ? (double) registrosColididos / nr * 100 : 0;
-        double taxaOverflow = (nb > 0) ? (double) bucketsComOverflow / nb * 100 : 0;
+        double taxaColisoes = (nr > 0) ? (double) qntdColisoes / nr * 100 : 0;
+        double taxaOverflow = (nb > 0) ? (double) qntdOverflow / nb * 100 : 0;
 
         return new CarregarDadosOutputDTO(
                 nr,
-                bucketsComOverflow,
-                registrosColididos,
+                qntdOverflow,
+                qntdColisoes,
                 taxaColisoes,
                 taxaOverflow
         );
@@ -188,19 +179,14 @@ public class IndiceService {
             );
         }
 
+        int custoIndice = 0;
         Pagina paginaEncontrada = tabelaDeDados.get(paginaId);
+        custoIndice++;
         for (String registro : paginaEncontrada.getRegistros()) {
             if (registro.equals(chaveBusca)) {
                 chaveEncontrada = registro;
                 break;
             }
-        }
-
-        // Custo: 1 por bucket lido (principal + overflows)
-        // Se achou, +1 por ler a página de dados
-        int custoIndice = bucketsPercorridos;
-        if (paginaId != -1) {
-            custoIndice += 1;
         }
 
         return new BuscaIndiceDetalhadaDTO(
@@ -285,6 +271,7 @@ public class IndiceService {
                 detalheIndice.paginaId(),
                 detalheIndice.custoIndice(),
                 tempoIndice,
+                tempoScan,
                 detalheIndice.enderecoBucket(),
                 detalheIndice.bucketsPercorridos(),
                 detalheScan,
@@ -313,7 +300,6 @@ public class IndiceService {
                 ultima.getRegistros().stream().limit(5).toList()
         );
 
-        // Reusa a lógica que você já tem para taxas:
         CarregarDadosOutputDTO est = calcularEstatisticas(nrTotal);
 
         return new IndiceStatusOutputDTO(
@@ -432,6 +418,22 @@ public class IndiceService {
 
     public void setTempoConstrucaoIndice(long tempoConstrucaoIndice) {
         this.tempoConstrucaoIndice = tempoConstrucaoIndice;
+    }
+
+    public int getQntdOverflow() {
+        return qntdOverflow;
+    }
+
+    public void setQntdOverflow(int qntdOverflow) {
+        this.qntdOverflow = qntdOverflow;
+    }
+
+    public int getQntdColisoes() {
+        return qntdColisoes;
+    }
+
+    public void setQntdColisoes(int qntdColisoes) {
+        this.qntdColisoes = qntdColisoes;
     }
 }
 

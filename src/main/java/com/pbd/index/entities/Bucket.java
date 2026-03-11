@@ -1,9 +1,8 @@
 package com.pbd.index.entities;
 
-import com.pbd.index.dtos.output.BuscaChaveOutputDTO;
-
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Bucket {
     private List<EntradaIndice> entradas;
@@ -21,14 +20,16 @@ public class Bucket {
 	return entradas.size() < fr;
     }
 
-    public void adicionar(String chave, int paginaId) {
+    public void adicionar(String chave, int paginaId, AtomicInteger qntdOverflow, AtomicInteger qntdColisoes) {
         if (temEspaco()) {
             entradas.add(new EntradaIndice(chave, paginaId));
         } else {
+	    qntdColisoes.incrementAndGet();
             if (this.overflow == null) {
+		qntdOverflow.incrementAndGet();
                 this.overflow = new Bucket(fr);
             }
-            this.overflow.adicionar(chave, paginaId);
+            this.overflow.adicionar(chave, paginaId, qntdOverflow, qntdColisoes);
         }
     }
 

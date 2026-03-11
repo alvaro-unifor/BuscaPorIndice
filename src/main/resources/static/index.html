@@ -341,7 +341,7 @@
     <section class="card" style="margin-top:16px;">
         <div class="card-header">
             <h2>Visualização de buckets e páginas</h2>
-            <span class="pill">Passo 3 (GUI)</span>
+            <span class="pill">Passo 3</span>
         </div>
 
         <div class="button-row">
@@ -497,22 +497,23 @@
             const custoIndice = indice.custoIndice;
             const custoScan = scan ? scan.custoPaginas : null;
             const tempoIndice = indice.tempoIndice;
-            const tempoScan = indice.diferencaTempo !== undefined && indice.diferencaTempo !== null
+            const tempoScan = indice.tempoScan;
+            const diferencaTempo = indice.diferencaTempo !== undefined && indice.diferencaTempo !== null
                 ? tempoIndice + indice.diferencaTempo
                 : null;
 
             badgeBucket.textContent = chaveNaoEncontrada
                 ? 'Bucket (índice): ' + indice.enderecoBucket + ' | Chave não encontrada'
                 : 'Bucket (índice): ' + indice.enderecoBucket + ' | Página (índice): ' + indice.paginaIdIndice;
-            badgeCustoIndice.textContent = 'Custo índice (buckets' + (chaveNaoEncontrada ? '' : ' + página') + '): ' + custoIndice;
+            badgeCustoIndice.textContent = 'Custo índice: ' + custoIndice;
             badgeCustoScan.textContent = 'Custo table scan (páginas): ' + (custoScan ?? '-');
 
             let resumoComparacao = 'Ganho índice vs scan: -';
             if (custoScan != null && custoScan > 0 && !chaveNaoEncontrada) {
                 const ganhoCusto = ((custoScan - custoIndice) / custoScan) * 100;
                 const ganhoCustoFmt = ganhoCusto.toFixed(1);
-                if (tempoScan && tempoScan > 0) {
-                    const ganhoTempo = ((tempoScan - tempoIndice) / tempoScan) * 100;
+                if (diferencaTempo && diferencaTempo > 0) {
+                    const ganhoTempo = ((diferencaTempo - tempoIndice) / diferencaTempo) * 100;
                     resumoComparacao = `Índice lê ~${ganhoCustoFmt}% menos páginas e é ~${ganhoTempo.toFixed(1)}% mais rápido que o scan.`;
                 } else {
                     resumoComparacao = `Índice lê ~${ganhoCustoFmt}% menos páginas que o table scan.`;

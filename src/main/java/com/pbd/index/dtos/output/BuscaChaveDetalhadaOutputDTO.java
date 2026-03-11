@@ -5,8 +5,9 @@ public record BuscaChaveDetalhadaOutputDTO(
         int paginaIdIndice,
         int custoIndice,
         long tempoIndice,
+	long tempoScan,
         int enderecoBucket,
         int bucketsPercorridos,
         TableScanDetalhadoDTO tableScan,
-        long diferencaTempo // tableScan - indice (ns)
+        long diferencaTempo
 ) {}
