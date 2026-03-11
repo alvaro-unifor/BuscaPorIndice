@@ -208,6 +208,8 @@
             padding: 8px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
             font-size: 0.78rem;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
 
         .output strong {
@@ -310,9 +312,10 @@
             <div class="row">
                 <div>
                     <label for="chaveBusca">Chave para busca</label>
-                    <input id="chaveBusca" type="text" placeholder="Digite a palavra exata">
+                    <input id="chaveBusca" type="text" placeholder="Digite a palavra exata" oninput="atualizarEstadoBotoesBusca()">
                 </div>
-                <button id="btnBuscarDetalhado" onclick="buscarDetalhado()">Buscar detalhado</button>
+                <button id="btnBuscarDetalhado" onclick="buscarDetalhado()">Buscar por índice</button>
+                <button id="btnTableScan" class="secondary" onclick="executarTableScan()" disabled title="Informe uma chave para habilitar">Table Scan</button>
             </div>
 
             <div class="status-row">
@@ -389,13 +392,15 @@
             });
 
             if (!resp.ok) {
-                throw new Error('Erro HTTP ' + resp.status);
+                const errBody = await resp.json().catch(() => ({}));
+                const msg = errBody.tamanhoPagina || (resp.status === 400 ? 'Valor inválido. Tamanho deve ser maior que zero.' : 'Erro HTTP ' + resp.status);
+                throw new Error(msg);
             }
 
             erro.style.display = 'none';
             alert('Tamanho da página definido com sucesso.');
         } catch (e) {
-            erro.textContent = 'Falha ao definir tamanho de página. Verifique se o backend está no ar.';
+            erro.textContent = e.message || 'Falha ao definir tamanho de página. Verifique se o backend está no ar.';
             erro.style.display = 'block';
         }
     }
@@ -427,7 +432,8 @@
             }
             const data = await resp.json();
 
-            statusDiv.textContent = 'Carga concluída. Estatísticas de overflow/colisões:\\n'
+            statusDiv.textContent = 'Carga concluída. Total de palavras carregadas: ' + (data.totalPalavrasCarregadas ?? 'N/A') + '\n\n'
+                + 'Estatísticas de overflow/colisões:\n'
                 + JSON.stringify(data, null, 2);
         } catch (e) {
             erro.textContent = 'Falha ao carregar arquivo. Garanta que o tamanho de página já foi definido.';
@@ -450,6 +456,11 @@
         } catch (e) {
             el.textContent = 'Erro ao buscar status. Verifique se o backend está no ar.';
         }
+    }
+
+    function atualizarEstadoBotoesBusca() {
+        const chave = document.getElementById('chaveBusca').value.trim();
+        document.getElementById('btnTableScan').disabled = !chave;
     }
 
     async function buscarDetalhado() {
@@ -479,9 +490,9 @@
             }
             const data = await resp.json();
 
-            // Atualiza badges principais
             const indice = data;
             const scan = data.tableScan;
+            const chaveNaoEncontrada = indice.paginaIdIndice < 0;
 
             const custoIndice = indice.custoIndice;
             const custoScan = scan ? scan.custoPaginas : null;
@@ -490,70 +501,141 @@
                 ? tempoIndice + indice.diferencaTempo
                 : null;
 
-            badgeBucket.textContent =
-                'Bucket (índice): ' + indice.enderecoBucket +
-                ' | Página (índice): ' + indice.paginaIdIndice;
-            badgeCustoIndice.textContent = 'Custo índice (buckets + página): ' + custoIndice;
+            badgeBucket.textContent = chaveNaoEncontrada
+                ? 'Bucket (índice): ' + indice.enderecoBucket + ' | Chave não encontrada'
+                : 'Bucket (índice): ' + indice.enderecoBucket + ' | Página (índice): ' + indice.paginaIdIndice;
+            badgeCustoIndice.textContent = 'Custo índice (buckets' + (chaveNaoEncontrada ? '' : ' + página') + '): ' + custoIndice;
             badgeCustoScan.textContent = 'Custo table scan (páginas): ' + (custoScan ?? '-');
 
-            // Diferença percentual de custo/tempo entre índice e scan
             let resumoComparacao = 'Ganho índice vs scan: -';
-            if (custoScan && custoScan > 0) {
+            if (custoScan != null && custoScan > 0 && !chaveNaoEncontrada) {
                 const ganhoCusto = ((custoScan - custoIndice) / custoScan) * 100;
                 const ganhoCustoFmt = ganhoCusto.toFixed(1);
-
                 if (tempoScan && tempoScan > 0) {
                     const ganhoTempo = ((tempoScan - tempoIndice) / tempoScan) * 100;
-                    const ganhoTempoFmt = ganhoTempo.toFixed(1);
-                    resumoComparacao =
-                        `Índice lê ~${ganhoCustoFmt}% menos páginas e é ~${ganhoTempoFmt}% mais rápido que o scan.`;
+                    resumoComparacao = `Índice lê ~${ganhoCustoFmt}% menos páginas e é ~${ganhoTempo.toFixed(1)}% mais rápido que o scan.`;
                 } else {
-                    resumoComparacao =
-                        `Índice lê ~${ganhoCustoFmt}% menos páginas que o table scan.`;
+                    resumoComparacao = `Índice lê ~${ganhoCustoFmt}% menos páginas que o table scan.`;
                 }
+            } else if (chaveNaoEncontrada) {
+                resumoComparacao = 'Chave não encontrada no índice.';
             }
             badgeComparacao.textContent = resumoComparacao;
 
-            // Exibe parte relevante de índice
-            const indiceResumo = {
-                chave: indice.chave,
-                paginaIdIndice: indice.paginaIdIndice,
-                custoIndice: indice.custoIndice,
-                enderecoBucket: indice.enderecoBucket,
-                bucketsPercorridos: indice.bucketsPercorridos,
-                tempoIndiceNs: indice.tempoIndice
-            };
-            saidaIndice.textContent = JSON.stringify(indiceResumo, null, 2);
+            if (chaveNaoEncontrada) {
+                saidaIndice.innerHTML = '<span class="badge-danger" style="display:inline-block;">Chave não encontrada</span><br><br>' +
+                    'A chave "' + escapeHtml(chave) + '" não existe no índice. O bucket ' + indice.enderecoBucket + ' foi consultado ' +
+                    'e percorridos ' + indice.bucketsPercorridos + ' bucket(s), mas a chave não foi localizada.<br><br>' +
+                    '<pre>' + JSON.stringify({
+                        chave: indice.chave,
+                        paginaIdIndice: -1,
+                        custoIndice: indice.custoIndice,
+                        enderecoBucket: indice.enderecoBucket,
+                        bucketsPercorridos: indice.bucketsPercorridos,
+                        encontrada: false
+                    }, null, 2) + '</pre>';
+            } else {
+                const indiceResumo = {
+                    chave: indice.chave,
+                    paginaIdIndice: indice.paginaIdIndice,
+                    custoIndice: indice.custoIndice,
+                    enderecoBucket: indice.enderecoBucket,
+                    bucketsPercorridos: indice.bucketsPercorridos,
+                    tempoIndiceNs: indice.tempoIndice,
+                    encontrada: true
+                };
+                saidaIndice.textContent = JSON.stringify(indiceResumo, null, 2);
+            }
 
-            // Exibe table scan detalhado (caminho de páginas visitadas)
             if (scan) {
                 const scanResumo = {
                     paginaEncontrada: scan.paginaEncontrada,
                     custoPaginas: scan.custoPaginas,
                     paginasVisitadas: scan.paginasVisitadas,
-                    previews: scan.previews
+                    previews: scan.previews,
+                    encontrada: scan.paginaEncontrada >= 0
                 };
-                saidaScan.textContent = JSON.stringify(scanResumo, null, 2);
+                if (scan.paginaEncontrada < 0) {
+                    saidaScan.innerHTML = '<span class="badge-danger" style="display:inline-block;">Chave não encontrada</span><br><br>' +
+                        'O table scan percorreu todas as ' + scan.custoPaginas + ' página(s) e não localizou a chave.<br><br>' +
+                        '<pre>' + JSON.stringify(scanResumo, null, 2) + '</pre>';
+                } else {
+                    saidaScan.textContent = JSON.stringify(scanResumo, null, 2);
+                }
             } else {
                 saidaScan.textContent = 'Nenhum detalhe de table scan retornado.';
             }
 
-            // Destaques visuais em buckets e páginas (CA29)
             highlightBuckets.style.display = 'block';
             highlightBuckets.innerHTML =
-                `Última busca "<strong>${indice.chave}</strong>": bucket <strong>#${indice.enderecoBucket}</strong> ` +
-                `(percorridos: ${indice.bucketsPercorridos}).`;
+                `Última busca "<strong>${escapeHtml(indice.chave)}</strong>": bucket <strong>#${indice.enderecoBucket}</strong> ` +
+                `(percorridos: ${indice.bucketsPercorridos})` +
+                (chaveNaoEncontrada ? ' — <span class="badge-danger">não encontrada</span>' : '.');
 
             const partesPagina = [];
-            partesPagina.push(`página pelo índice: <strong>${indice.paginaIdIndice}</strong>`);
-            if (scan && scan.paginaEncontrada !== undefined && scan.paginaEncontrada >= 0) {
+            if (chaveNaoEncontrada) {
+                partesPagina.push('<span class="badge-danger">índice: chave não encontrada</span>');
+            } else {
+                partesPagina.push(`página pelo índice: <strong>${indice.paginaIdIndice}</strong>`);
+            }
+            if (scan && scan.paginaEncontrada >= 0) {
                 partesPagina.push(`página pelo table scan: <strong>${scan.paginaEncontrada}</strong>`);
+            } else if (scan) {
+                partesPagina.push('<span class="badge-danger">table scan: chave não encontrada</span>');
             }
             highlightPaginas.style.display = 'block';
-            highlightPaginas.innerHTML =
-                `Última busca "<strong>${indice.chave}</strong>": ` + partesPagina.join(' | ');
+            highlightPaginas.innerHTML = `Última busca "<strong>${escapeHtml(indice.chave)}</strong>": ` + partesPagina.join(' | ');
         } catch (e) {
             saidaIndice.textContent = 'Erro ao chamar /indice/pesquisar-detalhado.';
+        }
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    async function executarTableScan() {
+        const chave = document.getElementById('chaveBusca').value.trim();
+        const saidaScan = document.getElementById('saidaScan');
+
+        if (!chave) {
+            alert('Informe uma chave para executar o table scan.');
+            return;
+        }
+
+        saidaScan.textContent = 'Executando table scan...';
+
+        try {
+            const resp = await fetch('/indice/table-scan?chave=' + encodeURIComponent(chave));
+            if (!resp.ok) {
+                saidaScan.textContent = 'Erro: dados não carregados ou erro HTTP ' + resp.status + '.';
+                return;
+            }
+            const data = await resp.json();
+
+            if (data.paginaEncontrada < 0) {
+                saidaScan.innerHTML = '<span class="badge-danger" style="display:inline-block;">Chave não encontrada</span><br><br>' +
+                    'O table scan percorreu todas as ' + data.custoPaginas + ' página(s) e não localizou a chave "' + escapeHtml(chave) + '".<br><br>' +
+                    '<pre>' + JSON.stringify({
+                        ...data,
+                        encontrada: false
+                    }, null, 2) + '</pre>';
+            } else {
+                saidaScan.textContent = JSON.stringify({
+                    ...data,
+                    encontrada: true
+                }, null, 2);
+            }
+
+            const highlightPaginas = document.getElementById('highlightPaginas');
+            highlightPaginas.style.display = 'block';
+            highlightPaginas.innerHTML = data.paginaEncontrada >= 0
+                ? `Table scan: chave "<strong>${escapeHtml(chave)}</strong>" encontrada na página <strong>${data.paginaEncontrada}</strong> (custo: ${data.custoPaginas} páginas).`
+                : `Table scan: chave "<strong>${escapeHtml(chave)}</strong>" <span class="badge-danger">não encontrada</span> (percorridas ${data.custoPaginas} páginas).`;
+        } catch (e) {
+            saidaScan.textContent = 'Erro ao executar table scan. Verifique se o backend está no ar.';
         }
     }
 
@@ -590,6 +672,10 @@
             el.textContent = 'Erro ao buscar páginas. Verifique se o backend está no ar.';
         }
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        atualizarEstadoBotoesBusca();
+    });
 </script>
 </body>
 </html>

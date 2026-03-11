@@ -13,6 +13,7 @@ import com.pbd.index.dtos.output.IndiceStatusOutputDTO;
 import com.pbd.index.dtos.output.BuscaChaveDetalhadaOutputDTO;
 import com.pbd.index.dtos.output.BucketDetalheDTO;
 import com.pbd.index.dtos.output.PaginaDetalheDTO;
+import com.pbd.index.dtos.output.TableScanDetalhadoDTO;
 
 import java.util.List;
 
@@ -66,6 +67,14 @@ public class IndiceController {
     @GetMapping("/pesquisar")
     public BuscaChaveOutputDTO pesquisar(@RequestParam String chave) {
         return service.pesquisar(chave);
+    }
+
+    @GetMapping("/table-scan")
+    public ResponseEntity<TableScanDetalhadoDTO> tableScan(@RequestParam String chave) {
+        if (service.getTabelaDeDados() == null || service.getTabelaDeDados().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(service.tableScanDetalhado(chave));
     }
 
     @GetMapping("/buckets")

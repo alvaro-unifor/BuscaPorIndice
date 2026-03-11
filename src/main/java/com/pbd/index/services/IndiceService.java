@@ -81,7 +81,10 @@ public class IndiceService {
     }
 
     private void configurarECriarIndice(int nr) {
-        this.nb = (int) Math.ceil((double) nr / fr) + (nr / 100);
+        // Regra: NB > NR/FR. Usamos ceil(NR/FR) + 1 para garantir estritamente maior.
+        // Para nr=0 ou edge cases, garantimos nb mínimo 2.
+        int minimoNb = (nr > 0) ? (int) Math.ceil((double) nr / fr) + 1 : 2;
+        this.nb = Math.max(2, minimoNb);
 
         this.buckets = new Bucket[nb];
         for (int i = 0; i < nb; i++) {
@@ -120,10 +123,11 @@ public class IndiceService {
         }
 
         // Cálculo das taxas percentuais
-        double taxaColisoes = (double) registrosColididos / nr * 100;
-        double taxaOverflow = (double) bucketsComOverflow / nb * 100;
+        double taxaColisoes = (nr > 0) ? (double) registrosColididos / nr * 100 : 0;
+        double taxaOverflow = (nb > 0) ? (double) bucketsComOverflow / nb * 100 : 0;
 
         return new CarregarDadosOutputDTO(
+                nr,
                 bucketsComOverflow,
                 registrosColididos,
                 taxaColisoes,
@@ -174,6 +178,16 @@ public class IndiceService {
             bucketAtual = bucketAtual.getOverflow();
         }
 
+        if (paginaId == -1) {
+            return new BuscaIndiceDetalhadaDTO(
+                    -1,
+                    bucketsPercorridos,
+                    enderecoBucket,
+                    bucketsPercorridos,
+                    null
+            );
+        }
+
         Pagina paginaEncontrada = tabelaDeDados.get(paginaId);
         for (String registro : paginaEncontrada.getRegistros()) {
             if (registro.equals(chaveBusca)) {
@@ -209,6 +223,10 @@ public class IndiceService {
             }
         }
         return -1;
+    }
+
+    public TableScanDetalhadoDTO tableScanDetalhado(String chaveBusca) {
+        return buscaTableScanDetalhada(chaveBusca);
     }
 
     private TableScanDetalhadoDTO buscaTableScanDetalhada(String chaveBusca) {
