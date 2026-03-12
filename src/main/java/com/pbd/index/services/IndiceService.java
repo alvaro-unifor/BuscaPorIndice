@@ -88,6 +88,7 @@ public class IndiceService {
     }
 
     private void configurarECriarIndice(int nr) {
+        long startTime = System.currentTimeMillis();
         int minimoNb = (nr > 0) ? (int) Math.ceil((double) nr / fr) + 1 : 2;
         this.nb = Math.max(2, minimoNb);
 
@@ -95,8 +96,6 @@ public class IndiceService {
         for (int i = 0; i < nb; i++) {
             buckets[i] = new Bucket(fr);
         }
-
-        long startTime = System.currentTimeMillis();
 
         AtomicInteger qntdOverflow = new AtomicInteger(0);
         AtomicInteger qntdColisoes = new AtomicInteger(0);
@@ -219,12 +218,10 @@ public class IndiceService {
         int custoPaginas = 0;
         int paginaEncontrada = -1;
 
-        List<Integer> paginasVisitadas = new ArrayList<>();
         List<PagePreviewDTO> previews = new ArrayList<>();
 
         for (Pagina p : tabelaDeDados) {
             custoPaginas++;
-            paginasVisitadas.add(p.getId());
 
             previews.add(new PagePreviewDTO(
                     p.getId(),
@@ -237,7 +234,6 @@ public class IndiceService {
                     return new TableScanDetalhadoDTO(
                             paginaEncontrada,
                             custoPaginas,
-                            paginasVisitadas,
                             previews
                     );
                 }
@@ -247,7 +243,6 @@ public class IndiceService {
         return new TableScanDetalhadoDTO(
                 -1,
                 custoPaginas,
-                paginasVisitadas,
                 previews
         );
     }
@@ -357,7 +352,7 @@ public class IndiceService {
         for (Pagina p : tabelaDeDados) {
             paginas.add(new PaginaDetalheDTO(
                     p.getId(),
-                    new ArrayList<>(p.getRegistros())
+                    p.getRegistros().stream().limit(5).toList()
             ));
         }
         return paginas;

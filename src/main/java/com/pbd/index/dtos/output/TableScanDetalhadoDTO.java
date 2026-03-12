@@ -5,6 +5,5 @@ import java.util.List;
 public record TableScanDetalhadoDTO(
         int paginaEncontrada,
         int custoPaginas,
-        List<Integer> paginasVisitadas,
         List<PagePreviewDTO> previews
 ) {}
