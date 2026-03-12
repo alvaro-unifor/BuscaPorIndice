@@ -253,6 +253,22 @@
         .highlight-bar strong {
             color: var(--accent);
         }
+
+        .tempo-row {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            margin-top: 8px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            background: rgba(56, 189, 248, 0.06);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            font-size: 0.85rem;
+        }
+
+        .tempo-row .badge {
+            padding: 4px 12px;
+        }
     </style>
 </head>
 <body>
@@ -323,6 +339,11 @@
                 <span id="badgeCustoIndice" class="badge-muted">Custo índice: -</span>
                 <span id="badgeCustoScan" class="badge-muted">Custo table scan: -</span>
                 <span id="badgeComparacao" class="badge-muted">Ganho índice vs scan: -</span>
+            </div>
+
+            <div id="tempoRow" class="tempo-row" style="display:none;">
+                <span id="badgeTempoIndice" class="badge">Tempo índice: -</span>
+                <span id="badgeTempoScan" class="badge">Tempo table scan: -</span>
             </div>
 
             <div class="columns-2">
@@ -471,6 +492,9 @@
         const badgeCustoIndice = document.getElementById('badgeCustoIndice');
         const badgeCustoScan = document.getElementById('badgeCustoScan');
         const badgeComparacao = document.getElementById('badgeComparacao');
+        const tempoRow = document.getElementById('tempoRow');
+        const badgeTempoIndice = document.getElementById('badgeTempoIndice');
+        const badgeTempoScan = document.getElementById('badgeTempoScan');
         const highlightBuckets = document.getElementById('highlightBuckets');
         const highlightPaginas = document.getElementById('highlightPaginas');
 
@@ -496,11 +520,17 @@
 
             const custoIndice = indice.custoIndice;
             const custoScan = scan ? scan.custoPaginas : null;
-            const tempoIndice = indice.tempoIndice;
-            const tempoScan = indice.tempoScan;
-            const diferencaTempo = indice.diferencaTempo !== undefined && indice.diferencaTempo !== null
-                ? tempoIndice + indice.diferencaTempo
-                : null;
+            const tempoIndiceNs = indice.tempoIndice;
+            const tempoScanNs = indice.tempoScan ?? (indice.diferencaTempo != null ? tempoIndiceNs + indice.diferencaTempo : null);
+
+            function formatarTempo(ns) {
+                if (ns == null || ns < 0) return '-';
+                return (ns / 1_000_000).toFixed(3) + ' ms';
+            }
+
+            tempoRow.style.display = 'block';
+            badgeTempoIndice.textContent = 'Tempo índice: ' + formatarTempo(tempoIndiceNs);
+            badgeTempoScan.textContent = 'Tempo table scan: ' + formatarTempo(tempoScanNs);
 
             badgeBucket.textContent = chaveNaoEncontrada
                 ? 'Bucket (índice): ' + indice.enderecoBucket + ' | Chave não encontrada'
@@ -512,8 +542,8 @@
             if (custoScan != null && custoScan > 0 && !chaveNaoEncontrada) {
                 const ganhoCusto = ((custoScan - custoIndice) / custoScan) * 100;
                 const ganhoCustoFmt = ganhoCusto.toFixed(1);
-                if (diferencaTempo && diferencaTempo > 0) {
-                    const ganhoTempo = ((diferencaTempo - tempoIndice) / diferencaTempo) * 100;
+                if (tempoScanNs != null && tempoScanNs > 0) {
+                    const ganhoTempo = ((tempoScanNs - tempoIndiceNs) / tempoScanNs) * 100;
                     resumoComparacao = `Índice lê ~${ganhoCustoFmt}% menos páginas e é ~${ganhoTempo.toFixed(1)}% mais rápido que o scan.`;
                 } else {
                     resumoComparacao = `Índice lê ~${ganhoCustoFmt}% menos páginas que o table scan.`;
