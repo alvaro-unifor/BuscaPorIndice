@@ -226,13 +226,11 @@ public class IndiceService {
             custoPaginas++;
             paginasVisitadas.add(p.getId());
 
-            // preview dos primeiros 5 registros da página (o que "foi lido")
             previews.add(new PagePreviewDTO(
                     p.getId(),
                     p.getRegistros().stream().limit(5).toList()
             ));
 
-            // varredura completa da página
             for (String registro : p.getRegistros()) {
                 if (registro.equals(chaveBusca)) {
                     paginaEncontrada = p.getId();
@@ -248,7 +246,7 @@ public class IndiceService {
 
         return new TableScanDetalhadoDTO(
                 -1,
-                custoPaginas, // leu tudo e não achou
+                custoPaginas,
                 paginasVisitadas,
                 previews
         );
@@ -281,13 +279,12 @@ public class IndiceService {
 
     public IndiceStatusOutputDTO getStatus() {
         if (tabelaDeDados == null || tabelaDeDados.isEmpty() || buckets == null) {
-            // Você pode trocar por exceção depois, mas assim já funciona.
             return null;
         }
 
         int totalPaginas = tabelaDeDados.size();
 
-        Pagina primeira = tabelaDeDados.get(0);
+        Pagina primeira = tabelaDeDados.getFirst();
         Pagina ultima = tabelaDeDados.get(totalPaginas - 1);
 
         PagePreviewDTO primeiraPreview = new PagePreviewDTO(
@@ -367,16 +364,12 @@ public class IndiceService {
     }
 
     private int funcaoHash(String chave) {
-        // O segredo do DJB2: começar com o número primo 5381
         long hash = 5381;
 
         for (int i = 0; i < chave.length(); i++) {
-            // Operação clássica do DJB2: (hash << 5) + hash + caractere
-            // Isso é o mesmo que: hash * 33 + caractere
             hash = ((hash << 5) + hash) + chave.charAt(i);
         }
 
-        // Garantimos o intervalo positivo e dentro do número de buckets
         return (int) (Math.abs(hash) % nb);
     }
 

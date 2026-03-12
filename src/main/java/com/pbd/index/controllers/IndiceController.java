@@ -38,13 +38,10 @@ public class IndiceController {
         }
 
         try {
-            // Agora o service devolve as estatísticas calculadas
             CarregarDadosOutputDTO estatisticas = service.processarCarga(arquivo);
 
-            // Retornamos as estatísticas no corpo da resposta com status 200 (OK)
             return ResponseEntity.ok(estatisticas);
         } catch (Exception e) {
-            // Em caso de erro, retornamos o status 500
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -53,7 +50,6 @@ public class IndiceController {
     public ResponseEntity<IndiceStatusOutputDTO> status() {
         IndiceStatusOutputDTO status = service.getStatus();
         if (status == null) {
-            // ainda não carregou dados/índice
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(status);
